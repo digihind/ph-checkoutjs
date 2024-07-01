@@ -1,128 +1,123 @@
-<?php 
-$base_url = isset($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) == 'on' ? 'https' : 'http' ;
-$base_url .= '://'.$_SERVER['HTTP_HOST'];
-$base_url .= str_replace(basename($_SERVER['SCRIPT_NAME']), '', $_SERVER['SCRIPT_NAME']);
+<?php
+$admin_data = file_get_contents("./worldline_AdminData.json");
+$mer_array = json_decode($admin_data, true);
 
-if(isset($_POST))
-{
-    $token = $_POST['transactionIdentifier'];
-	$amount = $_POST['amount'];
-	$date = $_POST['transactionDate'];
-	$newDate = date("d-m-Y", strtotime($date));
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $datastring = $_POST['mrctCode'] . "|" . $_POST['txn_id'] . "|" . $_POST['amount'] . "|" . $_POST['SALT'];
+    $hashed = hash('sha512', $datastring);
 
-	//echo $identifier.' | '.$newDate.'<br><br>';
-
-    $admin_data = file_get_contents("./worldline_AdminData.json");
-    $mer_array = json_decode($admin_data, true);
-
-  	$arr_req = array(
-  	    "merchant" => [
-  	        "identifier" => $mer_array['merchantCode']
-  	    ],
-        "cart" => [ "" => ""
+    $arr_req = array(
+        "merchant" => [
+            "identifier" => $_POST['mrctCode']
         ],
-  	    "transaction" => [ "deviceIdentifier" => "S", "amount" => $amount, "currency" => $mer_array['currency'], "dateTime" => $newDate, "token" => $token, "requestType" => "R"]
-  	);
+        "transaction" => [
+            "deviceIdentifier" => "S",
+            "currency" => $mer_array['currency'],
+            "dateTime" => date("d-m-Y"),
+            "token" => $_POST['txn_id'],
+            "requestType" => "R"
+        ],
+        "cart" => [
+            "item" => [
+                "amount" => $_POST['amount'],
+                "comAmt" => "0"
+            ]
+        ]
+    );
 
-	$finalJsonReq = json_encode($arr_req);
-
-	//echo $finalJsonReq; die();
+    $finalJsonReq = json_encode($arr_req);
 
     function callAPI($method, $url, $finalJsonReq)
     {
-       $curl = curl_init();
-       switch ($method){
-          case "POST":
-             curl_setopt($curl, CURLOPT_POST, 1);
-             if ($finalJsonReq)
-                curl_setopt($curl, CURLOPT_POSTFIELDS, $finalJsonReq);
-             break;
-          case "PUT":
-             curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "PUT");
-             if ($finalJsonReq)
-                curl_setopt($curl, CURLOPT_POSTFIELDS, $finalJsonReq);                              
-             break;
-          default:
-             if ($finalJsonReq)
-                $url = sprintf("%s?%s", $url, http_build_query($finalJsonReq));
-       }
-       // OPTIONS:
-       curl_setopt($curl, CURLOPT_URL, $url);
-       curl_setopt($curl, CURLOPT_HTTPHEADER, array(
-          'Content-Type: application/json',
-       ));
-       curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-       curl_setopt($curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-       curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, FALSE);
-       curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, FALSE);
-       // EXECUTE:
-       $result = curl_exec($curl);
-       if(!$result)
-       {
+        $curl = curl_init();
+        switch ($method) {
+            case "POST":
+                curl_setopt($curl, CURLOPT_POST, 1);
+                if ($finalJsonReq) {
+                    curl_setopt($curl, CURLOPT_POSTFIELDS, $finalJsonReq);
+                }
+                break;
+            case "PUT":
+                curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "PUT");
+                if ($finalJsonReq) {
+                    curl_setopt($curl, CURLOPT_POSTFIELDS, $finalJsonReq);
+                }
+                break;
+            default:
+                if ($finalJsonReq) {
+                    $url = sprintf("%s?%s", $url, http_build_query($finalJsonReq));
+                }
+        }
+        curl_setopt($curl, CURLOPT_URL, $url);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+            'Content-Type: application/json',
+        ));
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        $result = curl_exec($curl);
+        if (!$result) {
             die("Connection Failure !! Try after some time.");
         }
-       curl_close($curl);
-       return $result;
+        curl_close($curl);
+        return $result;
     }
 
     $method = 'POST';
     $url = "https://www.paynimo.com/api/paynimoV2.req";
     $res_result = callAPI($method, $url, $finalJsonReq);
     $refundData = json_decode($res_result, true);
-	/*$location = 'offline_verification.php';
-	header("Location: $location?encrypt=$offlineVerifyData");
-	echo "<pre>";print_r($offlineVerifyData);die();*/
 
-    //echo "<pre>";print_r($refundData);die();
-
-	echo '<table class="table" border = "1" align="center" cellpadding="2" cellspacing="0" style="width: 50%;text-align: center;">
-        <thead>
-          <tr class="info">
-            <th>Field Name</th>
-            <th>Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Merchant Code</td>
-            <td>'.$refundData["merchantCode"].'</td>
-          </tr>
-          <tr>
-            <td>Merchant Transaction Identifier</td>
-            <td>'.$refundData["merchantTransactionIdentifier"].'</td>
-          </tr>
-          <tr>
-            <td>Token Identifier</td>
-            <td>'.$refundData["paymentMethod"]["paymentTransaction"]["identifier"].'</td>
-          </tr>
-          <tr>
-            <td>Refund Identifier</td>
-            <td>'.$refundData["paymentMethod"]["paymentTransaction"]["refundIdentifier"].'</td>
-          </tr>
-          <tr>
-            <td>Amount</td>
-            <td>'.$refundData["paymentMethod"]["paymentTransaction"]["amount"].'</td>
-          </tr>
-          <tr>
-            <td>Message</td>
-            <td>'.$refundData["paymentMethod"]["paymentTransaction"]["errorMessage"].'</td>
-          </tr>
-          <tr>
-            <td>Status Code</td>
-            <td>'.$refundData["paymentMethod"]["paymentTransaction"]["statusCode"].'</td>
-          </tr>
-          <tr>
-            <td>Status Message</td>
-            <td>'.$refundData["paymentMethod"]["paymentTransaction"]["statusMessage"].'</td>
-          </tr>
-          <tr>
-            <td>Date & Time</td>
-            <td>'.$refundData["paymentMethod"]["paymentTransaction"]["dateTime"].'</td>
-          </tr>
-        </tbody>
-      </table>
-      <br>
-      <a href=' .$base_url. "refund.php" . '>Go Back To Refund Page</a>';
+    echo '<div class="alert alert-info">
+        <strong>' . htmlspecialchars($_POST['txn_id']) . '</strong> - <strong>' . htmlspecialchars($refundData['paymentMethod']['paymentTransaction']['statusMessage']) . '</strong>
+    </div>';
 }
-
 ?>
+<html>
+<head>
+    <title>Refund Request</title>
+    <meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" type="text/javascript"></script>
+    <script src="assets/js/bootstrap.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <h2>Refund Request</h2>
+                <form method="post">
+                    <table class="table table-bordered table-hover">
+                        <tr class="info">
+                            <th width="40%">Field Name</th>
+                            <th width="60%">Field Value</th>
+                        </tr>
+                        <tr>
+                            <td><label>Merchant ID</label></td>
+                            <td><input type="text" name="mrctCode" value="<?php echo htmlspecialchars($mer_array['merchantCode'] ?? ''); ?>" /></td>
+                        </tr>
+                        <tr>
+                            <td><label>Transaction ID</label></td>
+                            <td><input type="text" name="txn_id" value="" /></td>
+                        </tr>
+                        <tr>
+                            <td><label>Amount</label></td>
+                            <td><input type="text" name="amount" value="" /></td>
+                        </tr>
+                        <tr>
+                            <td><label>SALT</label></td>
+                            <td><input type="text" name="SALT" value="<?php echo htmlspecialchars($mer_array['salt'] ?? ''); ?>" /></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">
+                                <input class="btn btn-danger" type="submit" name="submit" value="Submit" />
+                            </td>
+                        </tr>
+                    </table>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
