@@ -11,7 +11,7 @@
     "logoURL": "https:\/\/www.paynimo.com\/CompanyDocs\/company-logo-md.png",
     "enableExpressPay": "1",
     "separateCardMode": "0",
-    "enableNewWindowFlow": "1",
+    "enableNewWindowFlow": "0",
     "merchantMessage": "",
     "disclaimerMessage": "",
     "paymentMode": "all",
